@@ -274,7 +274,7 @@ if __name__ == '__main__':
         logging.info(msg)
         result, flag = main()
 
-    if main_attempt = main_max_attempt:
+    if main_attempt == main_max_attempt:
         msg = f"За заданные {main_max_attempt} попытки не удалось заполнить форму"
         logging.error(msg)
     if result:
