@@ -1,7 +1,7 @@
 # main.py
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""
+instr = """
     Предназначена для заполнения формы на сайте фитнес-клуба с использованием selenium
     Предполагается запуск по расписанию программы средствами операционной системы.
     Требуется наличие установленного браузера Chrome и скачанного вебдрайвера.
@@ -11,11 +11,12 @@
     вводить в вебформу
     - при отсутствии - просит пользователя внести данные, создает файл
     - открывает браузер, находит последовательного заданные элементы, заполняет соответсвующие поля.
-
+    - если флаг установлен в автомат и кнопка Отправить нажата, то переименовывает файл fields.txt для исключения
+      возможности повторной отправки
     !!!ВНИМАНИЕ!!!
     Если третья строка в файле "fields.txt" содержит 'automate', то на последнем шаге будет нажата
     кнопка ОТПРАВИТЬ.
-    Если строка незаполнена или содержит любое другое слово, то программа работает в тестовом режиме:
+    Если строка не заполнена или содержит любое другое слово, то программа работает в тестовом режиме:
     - откроет зал баскетбол в  воскресенье
     - кнопка ОТправить активна, но автоматически не нажата
 """
@@ -30,9 +31,10 @@ import random as rnd
 import os
 from name_input import get_fields
 
-
-logging.basicConfig(
-    format=u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', level=logging.DEBUG, filename='logs.log')
+log_format = u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s'
+log_level = logging.INFO
+log_file_name = 'logs.log'
+logging.basicConfig(format=log_format, level=log_level, filename=log_file_name)
 
 
 def main():
@@ -260,22 +262,26 @@ def main():
 
 
 if __name__ == '__main__':
+    msg = instr
+    logging.info(msg)
     main_attempt = 0
     main_max_attempt = 3
     result = False
     while not result and main_attempt < main_max_attempt:
         main_attempt += 1
-        msg = "______________________________________________________________________________________________\n"
+        msg = "_____________________________________________________________________\n"
         msg += f"Начата попытка №{main_attempt}"
         logging.info(msg)
         result, flag = main()
 
-    if main_attempt > main_max_attempt:
+    if main_attempt = main_max_attempt:
         msg = f"За заданные {main_max_attempt} попытки не удалось заполнить форму"
         logging.error(msg)
     if result:
         msg = f'Форма успешно заполнена. Флаг на отправку установлен: {flag}'
         logging.info(msg)
     else:
-        msg = f'На каком-то из этапов произошла ошибка'
+        msg = f'На каком-то из этапов произошла ошибка. Смотри лог выше'
         logging.critical(msg)
+
+    print(f"Логи записаны в файл: {log_file_name}")
