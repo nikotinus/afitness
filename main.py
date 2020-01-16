@@ -1,7 +1,7 @@
 # main.py
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
-instr = """
+#-*- coding: utf - 8 - *-
+instr = '''
     Предназначена для заполнения формы на сайте фитнес-клуба с использованием selenium
     Предполагается запуск по расписанию программы средствами операционной системы.
     Требуется наличие установленного браузера Chrome и скачанного вебдрайвера.
@@ -19,8 +19,9 @@ instr = """
     Если строка не заполнена или содержит любое другое слово, то программа работает в тестовом режиме:
     - откроет зал баскетбол в  воскресенье
     - кнопка ОТправить активна, но автоматически не нажата
-"""
+'''
 import logging
+from multiprocessing import Queue
 from time import sleep
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -152,6 +153,33 @@ def main():
         driver.close()
         return False, flag
 
+    # проверяем появление открытого окна
+    zal_title_path = '//*[@id="fitness-widget-popup"]/div/div[2]'
+    try:
+        zal_popup = WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.XPATH, zal_title_path)))
+        popup_name = zal_popup.text.split()[0].lower()
+        if popup_name != holl_name.lower():
+            msg = f'Имя всплывающего окна отличается от "{holl_name} клиенты"'
+            logging.error(msg)
+            driver.close()
+            return False, flag
+        else:
+            available_path = '//*[@id="fitness-widget-popup"]/div/div[4]/div[2]/p[7]'
+            available = WebDriverWait(driver, 5).until(
+                EC.visibility_of_element_located((By.XPATH, available_path)))
+            if " ".join(available.text.split()[0:3]) == "Свободных мест нет":
+                msg = "Cвободные места в зале закончились"
+                logging.info(msg)
+                return True, False
+        msg = f'Открылось всплывающее окно "{holl_name} клиенты"'
+        logging.info(msg)
+
+    except Exception:
+        msg = "Не удалось аллоцировать всплывающее окно зала"
+        driver.close()
+        return False, flag
+
     # находим путь до полей с именем и номером телефона
     path_name = '//input[@id="preentry_appl_name"]'
     path_phone = '//input[@id="preentry_appl_phone"]'
@@ -252,24 +280,25 @@ def main():
             return False, flag
     else:
         timeout = 10
-        msg = "Флаг установлен в ручной режим. У пользователя есть {timeout} секунд на нажатие кнопки Отправить"
+        msg = f"Флаг установлен в ручной режим. У пользователя есть {timeout} секунд на нажатие кнопки Отправить"
         logging.info(msg)
         sleep(timeout)
-        msg = "{timeout} секунд истекли. Закрываем браузер"
+        msg = f"{timeout} секунд истекли. Закрываем браузер"
         logging.info(msg)
     driver.close()
     return True, flag
 
 
 if __name__ == '__main__':
-    msg = instr
+    msg = f"\n\n------------------------------------------------------------------------------------------------------------\n"
+    msg += instr
     logging.info(msg)
     main_attempt = 0
-    main_max_attempt = 3
+    main_max_attempt = 5
     result = False
     while not result and main_attempt < main_max_attempt:
         main_attempt += 1
-        msg = "_____________________________________________________________________\n"
+        msg = f"\n\n{(str(main_attempt) + '---')*20}\n"
         msg += f"Начата попытка №{main_attempt}"
         logging.info(msg)
         result, flag = main()
@@ -278,8 +307,9 @@ if __name__ == '__main__':
         msg = f"За заданные {main_max_attempt} попытки не удалось заполнить форму"
         logging.error(msg)
     if result:
-        msg = f'Форма успешно заполнена. Флаг на отправку установлен: {flag}'
-        logging.info(msg)
+        if not flag:
+            msg = f'Форма успешно заполнена. Ипользованное количество попыток: {main_attempt}. Флаг на отправку установлен: {flag}'
+            logging.info(msg)
     else:
         msg = f'На каком-то из этапов произошла ошибка. Смотри лог выше'
         logging.critical(msg)
