@@ -1,8 +1,12 @@
 # main.py
 #!/usr/bin/python
 #-*- coding: utf - 8 - *-
-version = 2.2
+version = 2.3
 updates = f"""
+** 2.3:
+- исправлен блок адресации на всплывыающее окно и поиск текста о количестве свободных мест (оказалось,
+  что это два разных адреса - "свободные места" и "отсутствие свободных мест")
+
 ** 2.2:
 - в запись инструкции добавлена строка с версией программы
 - блок контроля всплывающего окна вынесен из блока try - except
@@ -86,6 +90,7 @@ def main():
         msg = "Проблемы с открытием файла. Возможно, требуется повторно запустить name_input.py"
         logging.error(msg)
         return False, flag
+
     try:
         driver = webdriver.Chrome()
         msg = "Найден файл с драйвером"
@@ -93,6 +98,7 @@ def main():
     except Exception:
         msg = "Не удалось найти драйвер Chrome - надо разместить его в папке с основным файлом"
         logging.error(msg)
+        return False, flag
 
     url = "https://spb.afitness.ru/dalnevostochniy/timetable"
     desires_title = "Расписание занятий в A-Fitness Дальневосточный в Санкт-Петербурге"
@@ -106,10 +112,6 @@ def main():
             attempt += 1
         msg = f"Предпринято {attempt} попыток для открытия url."
         logging.debug(msg)
-        if attempt > max_attempt:
-            msg = f"Количество попыток {attempt} превысило максимально допустимое {max_attempt}"
-            logging.error(msg)
-            raise Exception
         msg = f'Открыт заданный url: {url}'
         logging.info(msg)
     except Exception:
@@ -118,11 +120,15 @@ def main():
         driver.close()
         return False, flag
 
+    if attempt > max_attempt:
+        msg = f"Количество попыток {attempt} превысило максимально допустимое {max_attempt}"
+        logging.error(msg)
+        return False, flag
+
     try:
         driver.switch_to.window(driver.window_handles[0])
         msg = "Переключились в активное окно"
         logging.info(msg)
-
     except Exception:
         msg = "Не смогли переключитьcя в окно"
         logging.error(msg)
@@ -144,7 +150,6 @@ def main():
 
     # задаем путь до элементов с залом бадминтона и волейбола
     path_badminton = '//*[@id="fitness-widget-club-tab-0"]/div[6]/table/tbody/tr[15]/td[5]/div'
-    # path_voleyboll = '//*[@id="fitness-widget-club-tab-0"]/div[6]/table/tbody/tr[14]/td[6]/div[3]'
     path_basketball = '//*[@id="fitness-widget-club-tab-0"]/div[6]/table/tbody/tr[13]/td[8]/div'
 
     main_path = path_badminton if activity == 'badminton' else path_basketball
@@ -171,24 +176,50 @@ def main():
     try:
         zal_popup = WebDriverWait(driver, 5).until(
             EC.visibility_of_element_located((By.XPATH, zal_title_path)))
-        popup_name = zal_popup.text.split()[0].lower()
         msg = f'Открылось всплывающее окно "{holl_name} клиенты"'
         logging.info(msg)
     except Exception:
         msg = "Не удалось аллоцировать всплывающее окно зала"
         logging.error(msg)
-        driver.close()
-        return False, flag
 
+        try:
+            sportzal.click()
+            msg = f'Повторно кликнули спортзал {holl_name}'
+            logging.info(msg)
+            zal_popup = WebDriverWait(driver, 5).until(
+                EC.visibility_of_element_located((By.XPATH, zal_title_path)))
+            msg = f'Открылось всплывающее окно "{holl_name} клиенты"'
+            logging.info(msg)
+        except Exception:
+            msg = f"Повторно не удалось аллоцировать всплывающее окно зала"
+            logging.error(msg)
+            driver.close()
+            return False, flag
+
+    popup_name = zal_popup.text.split()[0].lower()
     if popup_name != holl_name.lower():
         msg = f'Имя всплывающего окна отличается от "{holl_name} клиенты"'
         logging.error(msg)
         driver.close()
         return False, flag
 
-    available_path = '//*[@id="fitness-widget-popup"]/div/div[4]/div[2]/p[7]'
+    no_place_path = '//*[@id="fitness-widget-popup"]/div/div[4]/div[2]/p[7]'
     try:
-        available = WebDriverWait(driver, 5).until(
+        no_place = WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.XPATH, no_place_path)))
+        msg = f"{no_place.text}"
+        logging.info(msg)
+        msg = "Отсутствуют свободные места"
+        logging.info(msg)
+        driver.close()
+        return True, False
+    except Exception:
+        msg = f'Не удалось определить блок отсутствия свободных мест по адресу: {no_place_path}'
+        logging.info(msg)
+
+    available_path = '//*[@id="fitness-widget-popup"]/div/div[4]/div[2]/p[1]'
+    try:
+        available = WebDriverWait(driver, 10).until(
             EC.visibility_of_element_located((By.XPATH, available_path)))
         msg = f'Определили блок с указанием количества свободных мест: {available.text}'
         logging.info(msg)
@@ -197,11 +228,6 @@ def main():
         logging.error(msg)
         driver.close()
         return False, flag
-
-    if " ".join(available.text.split()[0:3]) == "Свободных мест нет":
-        msg = "Cвободные места в зале закончились"
-        logging.info(msg)
-        return True, False
 
     # находим путь до полей с именем и номером телефона
     path_name = '//input[@id="preentry_appl_name"]'
@@ -234,7 +260,8 @@ def main():
         logging.error(msg)
         driver.close()
         return False, flag
-        # определяем поле с номером телефона
+
+    # определяем поле с номером телефона
     try:
         web_element_phone = WebDriverWait(driver, 20).until(
             EC.visibility_of_element_located((By.XPATH, path_phone)))
@@ -247,7 +274,8 @@ def main():
         logging.error(msg)
         driver.close()
         return False, flag
-        # заполняем телефон
+
+    # заполняем телефон
     try:
         for letter in phone:
             sleep(0.5)
@@ -332,7 +360,9 @@ if __name__ == '__main__':
     if result:
         if not flag:
             msg = f'Форма успешно заполнена. Ипользованное количество попыток: {main_attempt}. Флаг на отправку установлен: {flag}'
-            logging.info(msg)
+        else:
+            msg = f'Закончили'
+        logging.info(msg)
     else:
         msg = f'На каком-то из этапов произошла ошибка. Смотри лог выше'
         logging.critical(msg)
