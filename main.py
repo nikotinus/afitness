@@ -1,7 +1,19 @@
 # main.py
 #!/usr/bin/python
 #-*- coding: utf - 8 - *-
-instr = '''
+version = 2.2
+updates = f"""
+** 2.2:
+- в запись инструкции добавлена строка с версией программы
+- блок контроля всплывающего окна вынесен из блока try - except
+- актуализирована запись в лог под произведенные изменения
+
+** 2.1:
+- внесены мелкие правки в запись лога, форматирование, текстовка
+- добавлен контроль нажатия на окно
+"""
+instr = f'''
+    Версия программы: {version}
     Предназначена для заполнения формы на сайте фитнес-клуба с использованием selenium
     Предполагается запуск по расписанию программы средствами операционной системы.
     Требуется наличие установленного браузера Chrome и скачанного вебдрайвера.
@@ -155,30 +167,41 @@ def main():
 
     # проверяем появление открытого окна
     zal_title_path = '//*[@id="fitness-widget-popup"]/div/div[2]'
+    popup_name = ""
     try:
         zal_popup = WebDriverWait(driver, 5).until(
             EC.visibility_of_element_located((By.XPATH, zal_title_path)))
         popup_name = zal_popup.text.split()[0].lower()
-        if popup_name != holl_name.lower():
-            msg = f'Имя всплывающего окна отличается от "{holl_name} клиенты"'
-            logging.error(msg)
-            driver.close()
-            return False, flag
-        else:
-            available_path = '//*[@id="fitness-widget-popup"]/div/div[4]/div[2]/p[7]'
-            available = WebDriverWait(driver, 5).until(
-                EC.visibility_of_element_located((By.XPATH, available_path)))
-            if " ".join(available.text.split()[0:3]) == "Свободных мест нет":
-                msg = "Cвободные места в зале закончились"
-                logging.info(msg)
-                return True, False
         msg = f'Открылось всплывающее окно "{holl_name} клиенты"'
         logging.info(msg)
-
     except Exception:
         msg = "Не удалось аллоцировать всплывающее окно зала"
+        logging.error(msg)
         driver.close()
         return False, flag
+
+    if popup_name != holl_name.lower():
+        msg = f'Имя всплывающего окна отличается от "{holl_name} клиенты"'
+        logging.error(msg)
+        driver.close()
+        return False, flag
+
+    available_path = '//*[@id="fitness-widget-popup"]/div/div[4]/div[2]/p[7]'
+    try:
+        available = WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located((By.XPATH, available_path)))
+        msg = f'Определили блок с указанием количества свободных мест: {available.text}'
+        logging.info(msg)
+    except Exception:
+        msg = f'Не удалось определить блок с указанием количества свободных мест по адресу: {available_path}'
+        logging.error(msg)
+        driver.close()
+        return False, flag
+
+    if " ".join(available.text.split()[0:3]) == "Свободных мест нет":
+        msg = "Cвободные места в зале закончились"
+        logging.info(msg)
+        return True, False
 
     # находим путь до полей с именем и номером телефона
     path_name = '//input[@id="preentry_appl_name"]'
