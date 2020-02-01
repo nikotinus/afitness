@@ -1,20 +1,22 @@
 # main.py
 #!/usr/bin/python
 #-*- coding: utf - 8 - *-
-version = 3.0
+version = 3.1
 updates = f"""
 ** {version}:
+** 3.1
+- внесены изменения в моменте клика на спортзал: вместо sportzal.click() добавлена логика, описанная здесь:
+https://stackoverflow.com/questions/48665001/can-not-click-on-a-element-elementclickinterceptedexception-in-splinter-selen
+- упрощена процедура переименования файла - только в текущую директорию.
+** 3.0
 - рефакторинг кода для обработки ситуации, когда пользователь отдельно открыл файл с данными до начала работы программы
-
 ** 2.3:
 - исправлен блок адресации на всплывыающее окно и поиск текста о количестве свободных мест (оказалось,
   что это два разных адреса - "свободные места" и "отсутствие свободных мест")
-
 ** 2.2:
 - в запись инструкции добавлена строка с версией программы
 - блок контроля всплывающего окна вынесен из блока try - except
 - актуализирована запись в лог под произведенные изменения
-
 ** 2.1:
 - внесены мелкие правки в запись лога, форматирование, текстовка
 - добавлен контроль нажатия на окно
@@ -24,7 +26,6 @@ instr = f'''
     Предназначена для заполнения формы на сайте фитнес-клуба с использованием selenium
     Предполагается запуск по расписанию программы средствами операционной системы.
     Требуется наличие установленного браузера Chrome и скачанного вебдрайвера.
-
     Краткое описание:
     - проверяет наличие файла fields.txt - содержит информацию о том, что надо будет
     вводить в вебформу
@@ -49,7 +50,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 import random as rnd
 import os
-from name_input import get_fields, rename_fields
 
 log_format = u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s'
 log_level = logging.INFO
@@ -78,15 +78,15 @@ def main(file: str=None, max_attempt=5):
         return False
 
     att = 1
-    att_print_pattern = f'{att}-----'
-    msg = f'{att_print_pattern*13}{att}'
+    att_print_pattern = f'-----'
+    msg = f'{(att_print_pattern + str(att))*10}'
     logging.info(msg)
     form_fullfilled = fill_form(data=fields)
 
     next_try = 'try again'
-    while form_fullfilled == next_try and attempt <= max_attempt:
+    while form_fullfilled == next_try and att < max_attempt:
         att += 1
-        msg = f'{att_print_pattern*10}{att}'
+        msg = f'{(att_print_pattern + str(att))*10}'
         logging.info(msg)
         form_fullfilled = fill_form(data=fields)
         if not form_fullfilled:
@@ -105,9 +105,8 @@ def main(file: str=None, max_attempt=5):
 
     return True
 
-
 def check_data_existance(filename: str) -> bool:
-    #  проверяем наличие файла в корне программы
+    #  проверяем наличие файла в корне программы
     try:
         if not os.path.isfile(filename):
             msg = "Отсутствует файл с именем и телефоном (файл с данными)"
@@ -120,7 +119,6 @@ def check_data_existance(filename: str) -> bool:
         msg = "Ошибка при проверке наличия файла в корне программы"
         logging.error(msg)
         return False
-
 
 def create_data(filename: str) -> bool:
     name = input("Введи имя, которое хочешь заполнить в веб-форму: ")
@@ -145,7 +143,6 @@ def create_data(filename: str) -> bool:
         os.remove(filename)
         return False
 
-
 def extract_data(filename: str) -> dict:
     try:
         # читаем поля из файла
@@ -166,7 +163,6 @@ def extract_data(filename: str) -> dict:
         msg = f"Проблемы с открытием файла {filename}"
         logging.error(msg)
         return False
-
 
 def fill_form(data: dict) -> bool or str:
     if not isinstance(data, dict):
@@ -242,14 +238,22 @@ def fill_form(data: dict) -> bool or str:
 
     main_path = path_badminton if activity == 'badminton' else path_basketball
     holl_name = "Бадминтон" if activity == 'badminton' else "Баскетбол"
-    msg = f"Будем искать зал {holl_name}"
+    msg = f"Будем искать зал {holl_name} по адресу: {main_path}"
     logging.info(msg)
 
     try:
-        sportzal = WebDriverWait(driver, 20).until(
-            EC.visibility_of_element_located((By.XPATH, main_path)))
-        sleep(1)
-        sportzal.click()
+        sportzal = WebDriverWait(driver, 100).until(
+            EC.element_to_be_clickable((By.XPATH, main_path)))
+        msg = f"Нашли спортзал {holl_name}"
+        logging.info(msg)
+    except Exception:
+        msg = f"Не смогли найти спортзал {holl_name}"
+        logging.info(msg)
+        driver.close()
+        return next_try
+
+    try:
+        driver.execute_script("arguments[0].click();", sportzal)
         msg = f'Кликнули спортзал {holl_name}'
         logging.info(msg)
     except Exception:
@@ -257,39 +261,6 @@ def fill_form(data: dict) -> bool or str:
         logging.info(msg)
         driver.close()
         return next_try
-
-    # проверяем появление открытого окна
-    zal_title_path = '//*[@id="fitness-widget-popup"]/div/div[2]'
-    popup_name = ""
-    try:
-        zal_popup = WebDriverWait(driver, 5).until(
-            EC.visibility_of_element_located((By.XPATH, zal_title_path)))
-        msg = f'Открылось всплывающее окно "{holl_name} клиенты"'
-        logging.info(msg)
-    except Exception:
-        msg = "Не удалось аллоцировать всплывающее окно зала"
-        logging.info(msg)
-
-        try:
-            sportzal.click()
-            msg = f'Повторно кликнули спортзал {holl_name}'
-            logging.info(msg)
-            zal_popup = WebDriverWait(driver, 5).until(
-                EC.visibility_of_element_located((By.XPATH, zal_title_path)))
-            msg = f'Открылось всплывающее окно "{holl_name} клиенты"'
-            logging.info(msg)
-        except Exception:
-            msg = f"Повторно не удалось аллоцировать всплывающее окно зала"
-            logging.info(msg)
-            driver.close()
-            return next_try
-
-    popup_name = zal_popup.text.split()[0].lower()
-    if popup_name != holl_name.lower():
-        msg = f'Имя всплывающего окна отличается от "{holl_name} клиенты"'
-        logging.error(msg)
-        driver.close()
-        return False
 
     no_place_path = '//*[@id="fitness-widget-popup"]/div/div[4]/div[2]/p[7]'
     try:
@@ -365,7 +336,7 @@ def fill_form(data: dict) -> bool or str:
 
     # заполняем телефон
     try:
-        for letter in phone:
+        for letter in phone[:12]:
             sleep(0.5)
             sleep(rnd.random())
             web_element_phone.send_keys(letter)
@@ -422,12 +393,12 @@ def fill_form(data: dict) -> bool or str:
         loggin.critical(msg)
         return False
 
-
 def rename_data_filename(filename: str) -> bool:
     try:
-        # переименовываем файл с полями
-        old_name = os.path.normpath(os.path.join(
-            os.path.abspath(os.path.dirname(__file__)), filename))
+        # # переименовываем файл с полями
+        #         # old_name = os.path.normpath(os.path.join(
+        #         #     os.path.abspath(os.path.dirname(__file__)), filename))
+        old_name = filename
         msg = f'Прежнее имя файла: {old_name}'
         logging.info(msg)
     except Exception:
@@ -435,33 +406,41 @@ def rename_data_filename(filename: str) -> bool:
         logging.error(msg)
 
     try:
-        new_name = os.path.normpath(os.path.join(
-            os.path.abspath(os.path.dirname(__file__)), 'send_' & filename))
+        # new_name = os.path.normpath(os.path.join(
+        #         #     os.path.abspath(os.path.dirname(__file__)), 'send_' & filename))
+        new_name = f'send_{old_name}'
         msg = f'new_name: {new_name}'
         logging.info(msg)
     except Exception:
         msg = "Не смогли задать новое имя"
         logging.error(msg)
+
+    if check_data_existance(new_name):
+        msg = f'В папке уже содержится файл: {new_name}'
+        logging.info(msg)
+        try:
+            msg = f'Удаляем файл {new_name} из папки'
+            logging.info(msg)
+            os.remove(new_name)
+            msg = f'Файл {new_name} удален'
+            logging.info(msg)
+        except Exception:
+            msg = f"Не смогли удалить {new_name}"
+            logging.error(msg)
     try:
         os.rename(old_name, new_name)
         msg = "Переименован файл с данными"
         logging.info(msg)
     except Exception:
-        msg = " Не смогли переименовать файл с данными"
+        msg = " Не смогли переименовать файл с данными"
         logging.error(msg)
-
 
 if __name__ == '__main__':
     msg = f"\n\n------------------------------------------------------------------------------------------------------------\n"
     msg += instr
     logging.info(msg)
     filename = 'fields.txt'
-    try:
-        result = main(file=filename, max_attempt=6)
-    except Exception:
-        msg = f'Что-то произошло вне основной процедуры'
-        logging.critical(msg)
-        result = False
+    result = main(file=filename, max_attempt=6)
 
     if not result:
         msg = f'На каком-то из этапов заполнения формы произошла ошибка. Смотри лог выше'
